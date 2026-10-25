@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PCG Walkthroughs</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1d2433;--muted:#667085;--line:#d9dde3;--brand:#c2410c;--brand-ink:#fff;--ok:#15803d}
+@media (prefers-color-scheme:dark){:root{--bg:#111418;--card:#1b2027;--ink:#e7eaee;--muted:#9aa3ae;--line:#2c333d}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;min-height:53px}
+header h1{font-size:16px;margin:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{padding:14px;max-width:1400px;margin:0 auto}
+a{color:var(--brand)}
+.btn{appearance:none;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:9px 14px;border-radius:8px;font:inherit;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.big{padding:13px 20px;font-size:17px;font-weight:600}
+.btn:disabled{opacity:.5;cursor:default}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.muted{color:var(--muted)}.small{font-size:13px}
+label{display:block;margin:12px 0 4px;font-weight:600;font-size:14px}
+input[type=text],input[type=email],input[type=password],input[type=number]{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.list a{display:block;padding:12px 4px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.list a:last-child{border-bottom:0}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+.tag.cloud{color:var(--ok);border-color:var(--ok)}
+.planScroll{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:8px;-webkit-overflow-scrolling:touch;position:relative}
+.planInner{position:relative;width:100%}
+.planInner img{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;pointer-events:none}
+.planInner svg{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
+.capture{display:flex;flex-direction:column;height:calc(100dvh - 53px)}
+.capture .planScroll{flex:1;border-radius:0;border-left:0;border-right:0}
+.bar{display:flex;gap:8px;align-items:center;padding:10px 14px;background:var(--card);border-top:1px solid var(--line);flex-wrap:wrap}
+.timer{font-variant-numeric:tabular-nums;font-weight:700}
+.viewer{display:grid;gap:12px;grid-template-columns:1fr}
+@media (min-width:900px){.viewer{grid-template-columns:3fr 2fr}}
+.pano{position:relative;background:#000;border-radius:10px;overflow:hidden;height:46vh;min-height:240px}
+@media (min-width:900px){.pano{height:68vh}}
+.pano canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+.pano .empty{position:absolute;inset:0;display:grid;place-items:center;color:#aaa;text-align:center;padding:20px;z-index:1}
+.controls{display:flex;gap:8px;align-items:center;margin-top:8px}
+.controls input[type=range]{flex:1;min-width:60px}
+.hiddenVideo{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0}
+.planSide .planScroll{max-height:68vh}
+footer{text-align:center;padding:16px;color:var(--muted);font-size:12px}
+.progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin-top:10px}
+.progress>div{height:100%;background:var(--brand);width:0}
+.notice{padding:10px 12px;border-radius:8px;background:rgba(194,65,12,.12);font-size:14px;margin-bottom:12px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2433;color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;z-index:50;max-width:90vw;text-align:center}
+.linkbox{word-break:break-all;font-size:13px;padding:8px;background:var(--bg);border:1px solid var(--line);border-radius:6px;margin:8px 0}
+</style>
+<script src="config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+const APP_VERSION = '0.1.1';
+const FB_VER = '10.12.2';
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = t => { if (!isFinite(t) || t < 0) t = 0; const m = Math.floor(t / 60), s = Math.floor(t % 60); return m + ':' + String(s).padStart(2, '0'); };
+const app = $('#app');
+let cleanups = [];
+function cleanup(){ cleanups.forEach(f => { try { f(); } catch (e) {} }); cleanups = []; }
+function toast(msg, ms = 2500){ const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg; document.body.appendChild(d); setTimeout(() => d.remove(), ms); }
+function shell(title, body, { back = true, actions = '' } = {}){
+  app.innerHTML = `<header>${back ? '<a class="btn" href="#/" aria-label="Back">‹</a>' : ''}<h1>${esc(title)}</h1>${actions}</header>${body}`;
+}
+function shareLink(id){ return location.origin + location.pathname + '?w=' + encodeURIComponent(id); }
+async function copyText(t){ try { await navigator.clipboard.writeText(t); toast('Link copied'); } catch (e) { prompt('Copy this link:', t); } }
+
+/* ---------- local storage (IndexedDB, works offline on the jobsite) ---------- */
+const idb = {
+  db: null,
+  open(){ if (this.db) return Promise.resolve(this.db);
+    return new Promise((res, rej) => { const r = indexedDB.open('pcg-walk360', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('walks', { keyPath: 'id' });
+      r.onsuccess = () => { this.db = r.result; res(this.db); }; r.onerror = () => rej(r.error); }); },
+  async run(mode, fn){ const db = await this.open();
+    return new Promise((res, rej) => { const t = db.transaction('walks', mode); const req = fn(t.objectStore('walks'));
+      t.oncomplete = () => res(req ? req.result : undefined); t.onerror = () => rej(t.error); }); },
+  get(id){ return this.run('readonly', s => s.get(id)); },
+  put(w){ return this.run('readwrite', s => s.put(w)); },
+  del(id){ return this.run('readwrite', s => s.delete(id)); },
+  all(){ return this.run('readonly', s => s.getAll()); }
+};
+
+/* ---------- Firebase (optional until config.js is filled in) ---------- */
+let fb = null;
+async function initFirebase(){
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.apiKey || String(cfg.apiKey).startsWith('PASTE')) return;
+  const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
+  const [A0, A, F, S] = await Promise.all([
+    import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'),
+    import(base + 'firebase-firestore.js'), import(base + 'firebase-storage.js')]);
+  const a = A0.initializeApp(cfg);
+  fb = { auth: A.getAuth(a), db: F.getFirestore(a), st: S.getStorage(a), A, F, S, user: null };
+  let first = true;
+  await new Promise(res => A.onAuthStateChanged(fb.auth, u => {
+    fb.user = u;
+    if (first) { first = false; res(); }
+    else { const h = location.hash.replace(/^#\/?/, ''); if (!h || h === 'signin') route(); }
+  }));
+}
+
+/* ---------- path math ---------- */
+function nearestOnPath(taps, x, y, W, H){
+  if (!taps.length) return null;
+  if (taps.length === 1) return { ...taps[0] };
+  const px = x * W, py = y * H; let best = null;
+  for (let i = 0; i < taps.length - 1; i++){
+    const a = taps[i], b = taps[i + 1];
+    const ax = a.x * W, ay = a.y * H, dx = b.x * W - ax, dy = b.y * H - ay, L = dx * dx + dy * dy;
+    let u = L ? ((px - ax) * dx + (py - ay) * dy) / L : 0; u = Math.max(0, Math.min(1, u));
+    const qx = ax + u * dx, qy = ay + u * dy, d = (px - qx) ** 2 + (py - qy) ** 2;
+    if (!best || d < best.d) best = { d, x: qx / W, y: qy / H, t: a.t + u * (b.t - a.t) };
+  }
+  return best;
+}
+function posAt(taps, t){
+  if (!taps.length) return null;
+  if (t <= taps[0].t) return taps[0];
+  const last = taps[taps.length - 1]; if (t >= last.t) return last;
+  for (let i = 0; i < taps.length - 1; i++){
+    const a = taps[i], b = taps[i + 1];
+    if (t >= a.t && t <= b.t){ const u = b.t > a.t ? (t - a.t) / (b.t - a.t) : 0; return { x: a.x + u * (b.x - a.x), y: a.y + u * (b.y - a.y) }; }
+  }
+  return last;
+}
+
+/* ---------- plan file -> image ---------- */
+async function fileToPlan(file, page = 1){
+  const MAX = 3200; let c;
+  if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)){
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    const pdf = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    const p = await pdf.getPage(Math.min(Math.max(1, page), pdf.numPages));
+    const v1 = p.getViewport({ scale: 1 });
+    const vp = p.getViewport({ scale: Math.min(6, MAX / Math.max(v1.width, v1.height)) });
+    c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await p.render({ canvasContext: ctx, viewport: vp }).promise;
+  } else {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
+    const k = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight));
+    c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+  }
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+  return { blob, w: c.width, h: c.height };
+}
+
+/* ---------- plan view with path overlay ---------- */
+function mountPlan(host, url, W, H, { onTap } = {}){
+  const sw = Math.max(W, H) / 400;
+  host.innerHTML = `<div class="planInner"><img alt="Plan" src="${url}">
+    <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <polyline class="pl" fill="none" stroke="#e11d48" stroke-opacity=".85" stroke-linejoin="round" stroke-linecap="round" stroke-width="${sw}"/>
+      <g class="pts"></g>
+      <circle class="dot" r="${sw * 2.6}" fill="#2563eb" stroke="#fff" stroke-width="${sw * 0.8}" style="display:none"/>
+    </svg></div>`;
+  const inner = $('.planInner', host), svg = $('svg', host), pl = $('.pl', svg), pts = $('.pts', svg), dot = $('.dot', svg);
+  let zoom = 1;
+  svg.addEventListener('click', e => {
+    const r = svg.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    if (x >= 0 && x <= 1 && y >= 0 && y <= 1 && onTap) onTap(x, y);
+  });
+  return {
+    setPath(taps){
+      pl.setAttribute('points', taps.map(p => `${p.x * W},${p.y * H}`).join(' '));
+      pts.innerHTML = taps.map((p, i) => `<circle cx="${p.x * W}" cy="${p.y * H}" r="${sw * (i === 0 ? 2.2 : 1.5)}" fill="${i === 0 ? '#16a34a' : '#fff'}" stroke="#e11d48" stroke-width="${sw * 0.6}"/>`).join('');
+    },
+    setDot(p){ if (!p){ dot.style.display = 'none'; return; } dot.style.display = ''; dot.setAttribute('cx', p.x * W); dot.setAttribute('cy', p.y * H); },
+    zoomBy(f){
+      const cx = (host.scrollLeft + host.clientWidth / 2) / host.scrollWidth, cy = (host.scrollTop + host.clientHeight / 2) / host.scrollHeight;
+      zoom = Math.min(6, Math.max(1, zoom * f)); inner.style.width = (zoom * 100) + '%';
+      host.scrollLeft = cx * host.scrollWidth - host.clientWidth / 2; host.scrollTop = cy * host.scrollHeight - host.clientHeight / 2;
+    }
+  };
+}
+
+/* ---------- 360 video viewer (three.js) ---------- */
+function mountPano(host, video){
+  const renderer = new THREE.WebGLRenderer({ antialias: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const canvas = renderer.domElement; host.appendChild(canvas);
+  const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 1, 1, 1100);
+  const geo = new THREE.SphereGeometry(500, 64, 40); geo.scale(-1, 1, 1);
+  const tex = new THREE.VideoTexture(video); tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex })));
+  let lon = 180, lat = 0, pinch0 = null; const pts = new Map();
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+  const setFov = f => { camera.fov = Math.max(30, Math.min(100, f)); camera.updateProjectionMatrix(); };
+  canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pts.size === 2) pinch0 = { d: dist(), fov: camera.fov }; });
+  canvas.addEventListener('pointermove', e => {
+    const p = pts.get(e.pointerId); if (!p) return;
+    if (pts.size === 1){ const k = camera.fov / 75 * 0.15; lon -= (e.clientX - p.x) * k; lat = Math.max(-85, Math.min(85, lat + (e.clientY - p.y) * k)); }
+    p.x = e.clientX; p.y = e.clientY;
+    if (pts.size === 2 && pinch0) setFov(pinch0.fov * pinch0.d / dist());
+  });
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch0 = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); setFov(camera.fov + e.deltaY * 0.05); }, { passive: false });
+  const ro = new ResizeObserver(() => { const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); });
+  ro.observe(host);
+  let raf;
+  (function loop(){ raf = requestAnimationFrame(loop);
+    const phi = THREE.MathUtils.degToRad(90 - lat), th = THREE.MathUtils.degToRad(lon);
+    camera.lookAt(500 * Math.sin(phi) * Math.cos(th), 500 * Math.cos(phi), 500 * Math.sin(phi) * Math.sin(th));
+    renderer.render(scene, camera); })();
+  return { destroy(){ cancelAnimationFrame(raf); ro.disconnect(); tex.dispose(); geo.dispose(); renderer.dispose(); canvas.remove(); } };
+}
+
+/* ---------- shared viewer (plan + 360 video) ---------- */
+function viewer({ title, w, planUrl, back = true, crossOrigin = false, extraHtml = '', onOffset }){
+  const syncHtml = onOffset ? `<div class="card" style="margin-top:12px"><b>Sync video to path</b>
+    <p class="small muted">If the blue dot runs ahead of or behind the video, scrub the video to the moment you're standing on the green start point, then tap <b>Match start point</b>. Use ±1s to fine-tune.</p>
+    <div class="row"><button class="btn" id="om">−1s</button><span class="timer" id="ov"></span><button class="btn" id="op">+1s</button><button class="btn" id="match">Match start point</button></div></div>` : '';
+  shell(title, `<main><div class="viewer">
+    <div><div class="pano" id="pano"><div class="empty" id="empty">No video attached yet.</div></div>
+      <div class="controls"><button class="btn" id="play">▶</button><button class="btn" id="b10">−10s</button>
+        <input type="range" id="scrub" min="0" max="0" step="0.1" value="0"><span class="small timer" id="tl">0:00</span></div></div>
+    <div class="planSide"><div class="planScroll" id="plan"></div>
+      <div class="row" style="margin-top:8px"><span class="small muted" style="flex:1">Tap the red line to jump to that spot.</span><button class="btn" id="zo">−</button><button class="btn" id="zi">+</button></div>
+      ${syncHtml}${extraHtml}</div>
+  </div></main><footer>v${APP_VERSION}</footer>`, { back });
+
+  const plan = mountPlan($('#plan'), planUrl, w.planW, w.planH, { onTap: jump });
+  plan.setPath(w.taps || []);
+  $('#zi').onclick = () => plan.zoomBy(1.5); $('#zo').onclick = () => plan.zoomBy(1 / 1.5);
+
+  const panoHost = $('#pano'), scrub = $('#scrub'), tl = $('#tl'), playBtn = $('#play');
+  const video = document.createElement('video');
+  video.className = 'hiddenVideo'; video.playsInline = true; video.setAttribute('playsinline', ''); video.setAttribute('webkit-playsinline', ''); video.preload = 'auto';
+  if (crossOrigin) video.crossOrigin = 'anonymous';
+  panoHost.appendChild(video);
+  let pano = null, pending = null, offset = Number(w.offset) || 0, dragging = false, lastT = -1, hasVideo = false;
+  const clampT = t => Math.max(0, Math.min(video.duration || 0, t));
+
+  video.addEventListener('loadedmetadata', () => { scrub.max = video.duration; lastT = -1; if (pending != null){ video.currentTime = clampT(pending); pending = null; } });
+  video.addEventListener('play', () => playBtn.textContent = '❚❚');
+  video.addEventListener('pause', () => playBtn.textContent = '▶');
+  video.addEventListener('error', () => toast('Video failed to load. Check the file format, or the Storage CORS setting.', 5000));
+  playBtn.onclick = () => { if (!hasVideo) return toast('No video attached yet'); video.paused ? video.play().catch(() => {}) : video.pause(); };
+  $('#b10').onclick = () => { if (hasVideo) video.currentTime = clampT(video.currentTime - 10); };
+  scrub.addEventListener('input', () => { dragging = true; if (hasVideo) video.currentTime = +scrub.value; });
+  scrub.addEventListener('change', () => { dragging = false; });
+
+  function jump(x, y){
+    const r = nearestOnPath(w.taps || [], x, y, w.planW, w.planH); if (!r) return;
+    plan.setDot(r);
+    if (!hasVideo) return toast('Attach a video to play from this spot');
+    const vt = r.t + offset;
+    if (video.readyState >= 1) video.currentTime = clampT(vt); else pending = vt;
+    video.play().catch(() => {});
+  }
+
+  let raf;
+  (function loop(){ raf = requestAnimationFrame(loop);
+    const t = video.currentTime;
+    if (t !== lastT){ lastT = t; plan.setDot(posAt(w.taps || [], t - offset)); if (!dragging) scrub.value = t; tl.textContent = fmt(t) + ' / ' + fmt(video.duration); }
+  })();
+
+  cleanups.push(() => { cancelAnimationFrame(raf); if (pano) pano.destroy(); video.pause(); video.removeAttribute('src'); video.load(); });
+
+  if (onOffset){
+    const ov = $('#ov'); let tmr;
+    const show = () => ov.textContent = (offset >= 0 ? '+' : '') + offset.toFixed(1) + 's';
+    const setOffset = v => { offset = Math.round(v * 10) / 10; show(); lastT = -1; clearTimeout(tmr); tmr = setTimeout(() => onOffset(offset), 600); };
+    show();
+    $('#om').onclick = () => setOffset(offset - 1); $('#op').onclick = () => setOffset(offset + 1);
+    $('#match').onclick = () => { if (!w.taps?.length) return; if (!hasVideo) return toast('Attach a video first'); setOffset(video.currentTime - w.taps[0].t); toast('Synced'); };
+  }
+
+  return {
+    setVideo(src){ if (!src) return; video.src = src; hasVideo = true; $('#empty').style.display = 'none'; if (!pano) pano = mountPano(panoHost, video); }
+  };
+}
+
+/* ---------- screens ---------- */
+async function home(){
+  const local = (await idb.all()).sort((a, b) => b.createdAt - a.createdAt);
+  let top = '';
+  if (!fb) top = `<div class="notice">Cloud isn't set up yet, so walkthroughs save on this device only. Fill in <b>config.js</b> to turn on uploading and share links.</div>`;
+  else if (!fb.user) top = `<div class="card row"><span style="flex:1">Sign in to upload and share walkthroughs.</span><a class="btn" href="#/signin">Sign in</a></div>`;
+  shell('PCG Walkthroughs', `<main>${top}
+    <div class="row" style="margin-bottom:12px"><a class="btn primary big" href="#/new">+ New walkthrough</a></div>
+    <div class="card"><b>On this device</b><div class="list">${local.length ? local.map(w => `<a href="#/local/${w.id}">
+      <div class="row"><b style="flex:1">${esc(w.name)}</b>${w.cloudId ? '<span class="tag cloud">Shared</span>' : ''}</div>
+      <div class="small muted">${esc(w.project || '')}${w.project ? ' · ' : ''}${new Date(w.createdAt).toLocaleString()} · ${w.taps.length} points</div></a>`).join('') : '<p class="muted">None yet.</p>'}</div></div>
+    <div id="cloudBox"></div></main>
+    <footer>v${APP_VERSION}${fb && fb.user ? ` · ${esc(fb.user.email)} · <a href="#" id="so">Sign out</a>` : ''}</footer>`, { back: false });
+  const so = $('#so'); if (so) so.onclick = e => { e.preventDefault(); fb.A.signOut(fb.auth); };
+  if (fb && fb.user){
+    try {
+      const { collection, query, where, getDocs } = fb.F;
+      const snap = await getDocs(query(collection(fb.db, 'walkthroughs'), where('owner', '==', fb.user.uid)));
+      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      const box = $('#cloudBox'); if (!box) return;
+      box.innerHTML = `<div class="card"><b>Shared walkthroughs</b><div class="list">${rows.length ? rows.map(r => `<a href="#/cloud/${r.id}">
+        <b>${esc(r.name)}</b><div class="small muted">${esc(r.project || '')}${r.project ? ' · ' : ''}${new Date(r.createdAt || 0).toLocaleDateString()}</div></a>`).join('') : '<p class="muted">None uploaded yet.</p>'}</div></div>`;
+    } catch (e) { console.error(e); }
+  }
+}
+
+function newWalk(){
+  shell('New walkthrough', `<main><div class="card">
+    <label>Walkthrough name</label><input type="text" id="nm" placeholder="e.g. 3rd floor – framing walk">
+    <label>Project</label><input type="text" id="pj" placeholder="e.g. Home 2 Suites Douglasville">
+    <label>Floor plan (image or PDF)</label><input type="file" id="pf" accept="image/*,application/pdf">
+    <div id="pgRow" style="display:none"><label>PDF page number</label><input type="number" id="pg" min="1" value="1"></div>
+    <p class="small muted">Tip: use a clean floor plan sheet. You can zoom in while tapping.</p>
+    <button class="btn primary big" id="mk" style="margin-top:8px">Create &amp; go to capture</button>
+  </div></main>`);
+  $('#pf').onchange = () => { const f = $('#pf').files[0]; $('#pgRow').style.display = f && /pdf/i.test(f.type + f.name) ? '' : 'none'; };
+  $('#mk').onclick = async () => {
+    const name = $('#nm').value.trim(), file = $('#pf').files[0];
+    if (!name) return toast('Give it a name'); if (!file) return toast('Pick a floor plan');
+    const btn = $('#mk'); btn.disabled = true; btn.textContent = 'Preparing plan…';
+    try {
+      const p = await fileToPlan(file, parseInt($('#pg').value) || 1);
+      const id = 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await idb.put({ id, name, project: $('#pj').value.trim(), createdAt: Date.now(), planBlob: p.blob, planW: p.w, planH: p.h, taps: [], startedAt: null, offset: 0, cloudId: null, appVersion: APP_VERSION });
+      location.hash = '#/capture/' + id;
+    } catch (e) { console.error(e); toast('Could not read that plan file'); btn.disabled = false; btn.textContent = 'Create & go to capture'; }
+  };
+}
+
+async function capture(id){
+  const w = await idb.get(id); if (!w){ location.hash = '#/'; return; }
+  const url = URL.createObjectURL(w.planBlob); cleanups.push(() => URL.revokeObjectURL(url));
+  shell(w.name, `<div class="capture"><div class="planScroll" id="plan"></div>
+    <div class="small muted" style="padding:8px 14px 0;background:var(--card)" id="hint"></div>
+    <div class="bar"><button class="btn primary big" id="go"></button><span class="timer" id="tm">0:00</span><span class="small muted" id="cnt"></span>
+      <span style="flex:1"></span><button class="btn" id="undo">Undo</button><button class="btn" id="zo">−</button><button class="btn" id="zi">+</button>
+      <button class="btn" id="rs">Reset</button><a class="btn" href="#/local/${id}">Done</a></div></div>`);
+  let running = false, lock = null;
+  const plan = mountPlan($('#plan'), url, w.planW, w.planH, { onTap: async (x, y) => {
+    if (!running) return toast(w.startedAt ? 'Tap Resume first' : 'Press record on the camera, then tap Start');
+    w.taps.push({ x: +x.toFixed(5), y: +y.toFixed(5), t: +((Date.now() - w.startedAt) / 1000).toFixed(2) });
+    plan.setPath(w.taps); ui(); navigator.vibrate?.(15); await idb.put(w);
+  }});
+  plan.setPath(w.taps);
+  function ui(){
+    $('#go').textContent = !w.startedAt ? 'Start' : running ? 'Stop' : 'Resume';
+    $('#cnt').textContent = w.taps.length + ' pts';
+    $('#hint').textContent = !w.startedAt ? 'Press record on the camera first, then tap Start right away.'
+      : running ? 'Tap where you\'re standing: your starting spot first, then every doorway, corner and room. Stopped somewhere? Tap that spot again before you move on.'
+      : 'Stopped. Resume keeps the same clock, so only resume if the camera is still recording.';
+  }
+  const tick = setInterval(() => { if (w.startedAt && running) $('#tm').textContent = fmt((Date.now() - w.startedAt) / 1000); }, 250);
+  cleanups.push(() => { clearInterval(tick); lock?.release?.().catch(() => {}); });
+  $('#go').onclick = async () => {
+    if (!running){ if (!w.startedAt){ w.startedAt = Date.now(); await idb.put(w); } running = true; try { lock = await navigator.wakeLock?.request('screen'); } catch (e) {} }
+    else { running = false; lock?.release?.().catch(() => {}); lock = null; }
+    ui();
+  };
+  $('#undo').onclick = async () => { if (!w.taps.length) return; w.taps.pop(); plan.setPath(w.taps); ui(); await idb.put(w); };
+  $('#rs').onclick = async () => { if (!confirm('Clear all points and the clock?')) return; running = false; w.taps = []; w.startedAt = null; $('#tm').textContent = '0:00'; plan.setPath(w.taps); ui(); await idb.put(w); };
+  $('#zi').onclick = () => plan.zoomBy(1.5); $('#zo').onclick = () => plan.zoomBy(1 / 1.5);
+  ui();
+}
+
+async function viewLocal(id){
+  const w = await idb.get(id); if (!w){ location.hash = '#/'; return; }
+  const planUrl = URL.createObjectURL(w.planBlob); cleanups.push(() => URL.revokeObjectURL(planUrl));
+  const extra = `
+    <div class="card" style="margin-top:12px"><b>Video</b>
+      <p class="small muted">In Insta360 Studio, export as a 360° MP4 (H.264, 4K, lower bitrate for web). Pick it here to preview and sync.</p>
+      <input type="file" id="vf" accept="video/*"></div>
+    <div class="card"><b>Share</b><div id="shareBox"></div></div>
+    <div class="row"><a class="btn" href="#/capture/${id}">Edit points</a><button class="btn" id="del">Delete</button></div>`;
+  const v = viewer({ title: w.name, w, planUrl, extraHtml: extra, onOffset: async val => { w.offset = val; await idb.put(w); } });
+  let videoFile = null;
+  $('#vf').onchange = () => {
+    videoFile = $('#vf').files[0]; if (!videoFile) return;
+    const u = URL.createObjectURL(videoFile); cleanups.push(() => URL.revokeObjectURL(u));
+    v.setVideo(u); renderShare();
+  };
+  $('#del').onclick = async () => { if (!confirm('Delete this walkthrough from this device?')) return; await idb.del(id); location.hash = '#/'; };
+  function renderShare(){
+    const box = $('#shareBox'); if (!box) return;
+    if (w.cloudId){
+      const link = shareLink(w.cloudId);
+      box.innerHTML = `<div class="linkbox">${esc(link)}</div><div class="row"><button class="btn primary" id="cp">Copy link</button>${navigator.share ? '<button class="btn" id="sh">Share…</button>' : ''}<a class="btn" href="#/cloud/${w.cloudId}">Open shared version</a></div>
+        <p class="small muted">Changes to points or sync here won't update the shared copy. Adjust sync on the shared version.</p>`;
+      $('#cp').onclick = () => copyText(link);
+      const sh = $('#sh'); if (sh) sh.onclick = () => navigator.share({ title: w.name, url: link }).catch(() => {});
+      return;
+    }
+    if (!fb){ box.innerHTML = `<p class="small muted">Cloud isn't set up yet. Fill in config.js and deploy to Firebase to get share links.</p>`; return; }
+    if (!fb.user){ box.innerHTML = `<p class="small muted">Sign in to upload.</p><a class="btn" href="#/signin">Sign in</a>`; return; }
+    box.innerHTML = `<p class="small muted">Uploads the plan, path and video and gives you a link anyone can open, no login needed.</p>
+      <button class="btn primary" id="up" ${videoFile ? '' : 'disabled'}>Upload &amp; create share link</button>
+      ${videoFile ? '' : '<p class="small muted">Pick the video above first.</p>'}<div class="progress" id="pr" style="display:none"><div></div></div>`;
+    const up = $('#up');
+    up.onclick = async () => {
+      if (!w.taps.length) return toast('No path points to share yet');
+      up.disabled = true; up.textContent = 'Uploading…'; $('#pr').style.display = '';
+      try {
+        w.cloudId = await uploadWalk(w, videoFile, f => { const b = $('#pr > div'); if (b) b.style.width = Math.round(f * 100) + '%'; });
+        await idb.put(w); toast('Uploaded'); renderShare();
+      } catch (e) { console.error(e); toast('Upload failed: ' + (e.code || e.message), 5000); up.disabled = false; up.textContent = 'Upload & create share link'; }
+    };
+  }
+  renderShare();
+}
+
+async function uploadWalk(w, videoFile, onProg){
+  const { collection, doc, setDoc } = fb.F, { ref, uploadBytesResumable, getDownloadURL } = fb.S;
+  const dref = doc(collection(fb.db, 'walkthroughs'));
+  const base = `walkthroughs/${fb.user.uid}/${dref.id}/`;
+  const total = w.planBlob.size + videoFile.size, pw = w.planBlob.size / total;
+  const up = (path, blob, ct, start, span) => new Promise((res, rej) => {
+    const task = uploadBytesResumable(ref(fb.st, base + path), blob, { contentType: ct });
+    task.on('state_changed', s => onProg(start + span * s.bytesTransferred / s.totalBytes), rej,
+      async () => { try { res(await getDownloadURL(task.snapshot.ref)); } catch (e) { rej(e); } });
+  });
+  const planUrl = await up('plan.jpg', w.planBlob, 'image/jpeg', 0, pw);
+  const ext = (videoFile.name.split('.').pop() || 'mp4').toLowerCase();
+  const videoUrl = await up('video.' + ext, videoFile, videoFile.type || 'video/mp4', pw, 1 - pw);
+  await setDoc(dref, { owner: fb.user.uid, name: w.name, project: w.project || '', createdAt: w.createdAt,
+    planUrl, planW: w.planW, planH: w.planH, taps: w.taps, offset: w.offset || 0, videoUrl, storagePath: base, appVersion: APP_VERSION });
+  return dref.id;
+}
+
+async function viewCloud(id, shared){
+  shell('Loading…', '<main class="muted">Loading walkthrough…</main>', { back: !shared });
+  if (!fb){ shell('Not available', '<main><div class="card">This app isn\'t connected to the cloud yet.</div></main>', { back: !shared }); return; }
+  let snap;
+  try { snap = await fb.F.getDoc(fb.F.doc(fb.db, 'walkthroughs', id)); } catch (e) { console.error(e); }
+  if (!snap || !snap.exists()){ shell('Not found', '<main><div class="card">This walkthrough link isn\'t valid or was removed.</div></main>', { back: !shared }); return; }
+  const w = snap.data();
+  const canEdit = !shared && fb.user && fb.user.uid === w.owner;
+  const link = shareLink(id);
+  const extra = canEdit ? `<div class="card"><b>Share link</b><div class="linkbox">${esc(link)}</div>
+      <div class="row"><button class="btn primary" id="cp">Copy link</button>${navigator.share ? '<button class="btn" id="sh">Share…</button>' : ''}<a class="btn" href="${esc(link)}" target="_blank">Preview as viewer</a></div></div>`
+    : (w.project ? `<p class="small muted" style="margin-top:10px">${esc(w.project)}</p>` : '');
+  const v = viewer({ title: w.name, w, planUrl: w.planUrl, back: !shared, crossOrigin: true, extraHtml: extra,
+    onOffset: canEdit ? async val => { try { await fb.F.updateDoc(fb.F.doc(fb.db, 'walkthroughs', id), { offset: val }); } catch (e) { toast('Could not save sync'); } } : null });
+  v.setVideo(w.videoUrl);
+  if (canEdit){
+    $('#cp').onclick = () => copyText(link);
+    const sh = $('#sh'); if (sh) sh.onclick = () => navigator.share({ title: w.name, url: link }).catch(() => {});
+  }
+}
+
+function signIn(){
+  if (!fb){ location.hash = '#/'; return; }
+  shell('Sign in', `<main><div class="card" style="max-width:420px">
+    <label>Email</label><input type="email" id="em" autocomplete="username">
+    <label>Password</label><input type="password" id="pw" autocomplete="current-password">
+    <button class="btn primary big" id="go" style="margin-top:14px">Sign in</button><p class="small muted" id="err"></p></div></main>`);
+  $('#go').onclick = async () => {
+    try { await fb.A.signInWithEmailAndPassword(fb.auth, $('#em').value.trim(), $('#pw').value); location.hash = '#/'; }
+    catch (e) { $('#err').textContent = 'Sign-in failed: ' + (e.code || e.message); }
+  };
+}
+
+/* ---------- routing ---------- */
+const SHARE_ID = new URLSearchParams(location.search).get('w');
+async function route(){
+  cleanup();
+  if (SHARE_ID) return viewCloud(SHARE_ID, true);
+  const [r, id] = location.hash.replace(/^#\/?/, '').split('/');
+  if (r === 'new') return newWalk();
+  if (r === 'capture') return capture(id);
+  if (r === 'local') return viewLocal(id);
+  if (r === 'cloud') return viewCloud(id, false);
+  if (r === 'signin') return signIn();
+  return home();
+}
+window.addEventListener('hashchange', route);
+(async () => { try { await initFirebase(); } catch (e) { console.error('Firebase init failed', e); fb = null; } route(); })();
+</script>
+</body>
+</html>
