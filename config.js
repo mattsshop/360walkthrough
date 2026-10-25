@@ -1,8 +1,5 @@
 // PCG Walkthroughs v0.1.1 — Firebase settings.
-// Paste your web app config from Firebase console > Project settings > Your apps.
-// Leave as-is to run in "this device only" mode.
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+window.FIREBASE_CONFIG = {
   apiKey: "AIzaSyCe1k-pX5-2lOv6XNHe0UULzF7CWrd9zF8",
   authDomain: "walkthrough360mattsshop.firebaseapp.com",
   projectId: "walkthrough360mattsshop",
